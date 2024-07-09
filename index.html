@@ -7,21 +7,35 @@
     <meta name="viewport" content="initial-scale=1, width=device-width" />
     <script src="https://unpkg.com/react@latest/umd/react.development.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@latest/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@mui/material@latest/umd/material-ui.development.js"
-        crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@mui/material@latest/umd/material-ui.development.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@babel/standalone@latest/babel.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+    <style>
+       .material-icons.recording {
+        animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 0.8;
+        }
+        100% {
+            transform: scale(1.2);
+            opacity: 0;
+        }
+    }
+    </style>
 </head>
 
-<body>
-    <div id="root"></div>
+<body style="margin: 0; height: 100vh; display: flex; flex-direction: column;">
+    <div id="root" style="flex-grow: 1;"></div>
     <script type="text/babel">
-        const {
+       const {
             colors,
             CssBaseline,
             ThemeProvider,
@@ -31,6 +45,19 @@
             createTheme,
             Box,
             Skeleton,
+            IconButton,
+            InputAdornment,
+            Avatar,
+            Card,
+            CardContent,
+            Tooltip,
+            Dialog,
+            DialogActions,
+            DialogContent,
+            DialogContentText,
+            DialogTitle,
+            Button,
+            useMediaQuery,
         } = MaterialUI;
 
         const theme = createTheme({
@@ -38,53 +65,334 @@
                 mode: 'dark'
             },
         });
-        const WS = new WebSocket("ws://localhost:8000/ws");
+        const WS = new WebSocket("wss://e965-41-224-249-253.ngrok-free.app/ws");
 
         function App() {
-            const [response, setResponse] = React.useState("");
+            const [conversation, setConversation] = React.useState([]);
             const [question, setQuestion] = React.useState("");
             const [loading, setLoading] = React.useState(false);
+            const [playing, setPlaying] = React.useState(false);
+            const [recording, setRecording] = React.useState(false);
+            const [copiedIndex, setCopiedIndex] = React.useState(null);
+            const [openUploadModal, setOpenUploadModal] = React.useState(false);
+            const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+            const audioRef = React.useRef(null);
+
+            const chatbotAvatarUrl = 'https://img.freepik.com/vecteurs-libre/robot-vectoriel-graident-ai_78370-4114.jpg?w=740&t=st=1719827044~exp=1719827644~hmac=b5b8fdc75259fa0f72c383a276fba40d6d39f58aaf5a7e6279dfa54cdda3ee35';
 
             React.useEffect(() => {
                 WS.onmessage = (event) => {
                     setLoading(false);
                     const newResponse = event.data;
-                    console.log("hedhiiii", newResponse);
-                    setResponse(prevResponse => prevResponse + newResponse);
+                    setConversation(prevConversation => {
+                        const lastMessage = prevConversation[prevConversation.length - 1];
+                        if (lastMessage.role === 'bot' && !lastMessage.isComplete) {
+                            lastMessage.content += newResponse;
+                            return [...prevConversation.slice(0, -1), lastMessage];
+                        } else {
+                            return [...prevConversation, { role: 'bot', content: newResponse, isComplete: false }];
+                        }
+                    });
                 };
             }, []);
 
-            return (
-                <Container maxWidth="lg">
-                    <Box sx={{ my: 4 }}>
-                        <Typography variant="h4" component="h1" gutterBottom>
-                            AI Assistant
-                        </Typography>
-                        <TextField
-                            id="outlined-basic"
-                            label="Ask me Anything"
-                            variant="outlined"
-                            style={{ width: '100%' }}
-                            value={question}
-                            disabled={loading}
-                            onChange={e => {
-                                setQuestion(e.target.value)
-                            }}
-                            onKeyUp={e => {
-                                setLoading(false)
-                                if (e.key === "Enter") {
-                                    setResponse('')
-                                    setLoading(true)
-                                    WS.send(question);
-                                }
-                            }}
-                        />
+            const handleSpeech = async (text) => {
+                if (playing) {
+                    audioRef.current.pause();
+                    audioRef.current.currentTime = 0;
+                    setPlaying(false);
+                } else {
+                    const response = await fetch(`/tts?content=${encodeURIComponent(text)}`);
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio(url);
+                    audioRef.current = audio;
+                    audio.play();
+                    setPlaying(true);
+                    audio.onended = () => setPlaying(false);
+                }
+            };
+
+            const markdownToHtml = (markdownText) => {
+                return { __html: marked.parse(markdownText) };
+            };
+
+            const handleCopy = (text, index) => {
+                navigator.clipboard.writeText(text);
+                setCopiedIndex(index);
+                setTimeout(() => setCopiedIndex(null), 3000);
+            };
+
+            const handleRestart = () => {
+                setConversation([]);
+            };
+
+            const handleDislike = () => {
+                // Handle dislike action
+            };
+
+            const handleSend = (faqQuestion) => {
+                const userQuestion = faqQuestion || question;
+                if (userQuestion.trim() === "") {
+                    return;
+                }
+                setConversation(prevConversation => [...prevConversation, { role: 'user', content: userQuestion }]);
+                setQuestion('');
+                setLoading(true);
+                WS.send(userQuestion);
+            };
+
+            const handleOpenUploadModal = () => {
+                setOpenUploadModal(true);
+            };
+
+            const handleCloseUploadModal = () => {
+                setOpenUploadModal(false);
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const files = e.dataTransfer.files;
+                handleFiles(files);
+            };
+
+            const handleFiles = (files) => {
+                // Handle files dropped or selected via file input
+                console.log(files);
+            };
+
+            const handleFileUpload = (e) => {
+                const files = e.target.files;
+                handleFiles(files);
+            };
+
+            const handleMicClick = () => {
+                setRecording(!recording);
+                // Add your recording logic here
+            };
+
+            const renderMessage = (message, index) => {
+                return (
+                    <>
+                    <Box key={index} sx={{ display: 'flex', alignItems: message.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 2, flexDirection: message.role === 'user' ? 'row-reverse' : 'row' }}>
+                        {message.role === 'bot' && <Avatar alt="Chatbot Avatar" src={chatbotAvatarUrl} sx={{ mr: 2 }} />}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="body1" sx={{ borderRadius: '25px', backgroundColor: '#333', color: '#fff', p: 2 }} dangerouslySetInnerHTML={markdownToHtml(message.content)} />
+                    {message.role === 'bot' && (
+                                        <Box sx={{ display: 'flex', flexDirection: 'row', ml: 2 }}>
+                                            <Tooltip title={playing ? 'Arreter' : 'Lire a haute voix'}>
+                                                <IconButton onClick={() => handleSpeech(message.content)} sx={{ mt: 1, mx: 0.5, width:'fit-content'}}>
+                                                    <span className="material-icons" style={{fontSize: '17px'}}>
+                                                        {playing ? 'stop' : 'volume_up'}
+                                                    </span>
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Copier">
+                                                <IconButton onClick={() => handleCopy(message.content, index)} sx={{ mt: 1, mx: 0.5, width:'fit-content'}}>
+                                                    <span className="material-icons" style={{fontSize: '17px'}}>
+                                                        {copiedIndex === index ? 'check' : 'file_copy'}
+                                                    </span>
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title= "Regenerer">
+                                                <IconButton onClick={handleRestart } sx={{ mt: 1, mx: 0.5, width:'fit-content', fontSize: '20px'}}>
+                                                    <span className="material-icons" style={{fontSize: '17px'}}>
+                                                        restart_alt
+                                                    </span>
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title= "Mauvaise reponse">
+                                                <IconButton onClick={handleDislike} sx={{ mt: 1, mx: 0.5, width:'fit-content', fontSize: '20px'}}>
+                                                    <span className="material-icons" style={{fontSize: '17px'}}>
+                                                        thumb_down
+                                                    </span>
+                                                </IconButton>
+                                            </Tooltip>
+                                        </Box>
+                                    )}
+                                </Box>
                     </Box>
-                        {!response && loading && (<>
-                        <Skeleton />
-                        <Skeleton animation="wave" />
-                        <Skeleton animation={false} /></>)}
-                        {response && <Typography>{response}</Typography>}
+                                    </>
+                );
+            };
+            
+            const faqs = [
+                "J'ai besoin d'une attestation",
+                "Je souhaite annuler mon contrat",
+                "J'ai un sinistre a declarer",
+                "Avez-vous une offre Caution ?"
+            ];
+
+            return (
+                <Container disableGutters style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems:'center', px: 0 }}>
+                    <Box sx={{flexGrow: 1, width: '100%', pt:2, px:5}}>
+                        {conversation.length === 0 ? (
+                            <Card sx={{ borderRadius: '10px', textAlign: 'center', mb: 2, mx: 3 ,mt: 2}}>
+                                <CardContent>
+                                    <img src="https://studyassur.com/upload/content/images/partners/studyassur-logo.png" alt="studyassur-logo" style={{ maxWidth: '100px', marginBottom: '20px' }} />
+                                    <Typography variant="h6">
+                                        Hello ! Je suis votre assistant virtuel,<br />
+                                        comment puis-je vous aider ?
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <img src="https://studyassur.com/upload/content/images/partners/studyassur-logo.png" alt="studyassur-logo" style={{ maxWidth: '100px', marginBottom: '20px' }} />
+                        )}
+                        {conversation.map((message, index) => renderMessage(message, index))}
+                        {loading && (
+                            <Box sx={{ mt: 2 }}>
+                                <Skeleton />
+                                <Skeleton animation="wave" />
+                                <Skeleton animation={false} />
+                            </Box>
+                        )}
+                    </Box>
+                    {conversation.length === 0 && (
+                        <Box 
+      sx={{ 
+        width: '80%', 
+        display: 'flex', 
+        justifyContent: isMobile ? 'flex-start' : 'space-around', 
+        mb: 15, 
+        py: isMobile ? 2 : 0,
+        overflowX: isMobile ? 'auto' : 'visible' 
+      }}
+    >
+      {faqs.map((faq, index) => (
+        <Card 
+          key={index} 
+          onClick={() => handleSend(faq)} 
+          sx={{ 
+            minWidth: isMobile ? '70%' : '22%', 
+            borderRadius: '10px', 
+            cursor: 'pointer', 
+            mx: 1,
+            '&:hover': { 
+              boxShadow: 6, 
+              backgroundColor: '#615857' 
+            } 
+          }}
+        >
+          <CardContent>
+            <Typography variant="body1">
+              {faq}
+            </Typography>
+          </CardContent>
+        </Card>
+      ))}
+    </Box>
+                        )}
+                    <Box sx={{ display:'flex', flexDirection: 'row-reverse', alignItems:'center', width: '80%', position: 'fixed', bottom: 0, pb: 2 ,backgroundImage: 'linear-gradient(0deg, rgba(18,18,18,1) 50%, rgba(0,212,255,0) 100%)'}}>
+                        <Box sx={{  width: '95%'}}>
+                            <TextField
+                                id="outlined-basic"
+                                label="Posez-moi une question"
+                                variant="outlined"
+                                value={question}
+                                fullWidth
+                                disabled={loading}
+                                onChange={e => setQuestion(e.target.value)}
+                                onKeyUp={e => {
+                                    if (e.key === "Enter" && question.trim() !== "") {
+                                        handleSend();
+                                    }
+                                }}
+                                sx={{ borderRadius: '25px' }}
+                                InputProps={{
+                                    style: {
+                                        borderRadius: '25px',
+                                        backgroundColor: '#333',
+                                        color: '#fff',
+                                    },
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton onClick={handleMicClick}>
+                                                <span className={recording ? "material-icons recording" : "material-icons"}>mic</span>
+                                            </IconButton>
+                                            <IconButton onClick={handleOpenUploadModal}>
+                                                <span className="material-icons">image</span>
+                                            </IconButton>
+                                            {question && (
+                                                <IconButton onClick={() => handleSend(question)}>
+                                                    <span className="material-icons">send</span>
+                                                </IconButton>
+                                            )}
+                                        </InputAdornment>
+                                    )
+                                }}
+                            />
+                        </Box>
+                        <IconButton onClick={handleRestart} sx={{height: '100%', display: 'flex', flexWrap: 'No-wrap'}} >
+                            <span className="material-icons">restart_alt</span>
+                        </IconButton>
+                    </Box>
+                    <Dialog 
+                        open={openUploadModal} 
+                        onClose={handleCloseUploadModal} 
+                        sx={{
+                            '& .MuiDialog-paper': {
+                                borderRadius: '15px',
+                                padding: '20px',
+                                backgroundColor: '#282c34',
+                                color: '#fff',
+                            }
+                        }}
+                    >
+                        <DialogTitle 
+                            sx={{
+                                fontWeight: 'bold',
+                                fontSize: '1.5rem',
+                                textAlign: 'center',
+                                color: '#61dafb'
+                            }}
+                        >
+                            Upload Files
+                        </DialogTitle>
+                        <DialogContent>
+                            <Box
+                                sx={{
+                                    border: '2px dashed #61dafb',
+                                    borderRadius: '10px',
+                                    textAlign: 'center',
+                                    padding: '20px',
+                                    backgroundColor: '#333',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                        backgroundColor: '#444',
+                                    },
+                                }}
+                                onDrop={handleDrop}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
+                            >
+                                <input
+                                    accept="image/*"
+                                    style={{ display: 'none' }}
+                                    id="upload-file"
+                                    type="file"
+                                    onChange={handleFileUpload}
+                                />
+                                <label htmlFor="upload-file">
+                                    <Typography variant="body1" component="div">
+                                        Drag & Drop files here<br />or <br /> click to choose files
+                                    </Typography>
+                                </label>
+                            </Box>
+                        </DialogContent>
+                        <DialogActions sx={{ justifyContent: 'center', paddingTop: '20px' }}>
+                            <Button onClick={handleCloseUploadModal}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleCloseUploadModal} color="primary" variant="contained">
+                                Upload
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
                 </Container>
             );
         }
@@ -95,7 +403,7 @@
                 <App />
             </ThemeProvider>,
         );
+
     </script>
 </body>
-
 </html>
