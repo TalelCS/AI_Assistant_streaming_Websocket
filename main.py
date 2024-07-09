@@ -11,7 +11,7 @@ from openai import AsyncOpenAI, AsyncAssistantEventHandler, override
 load_dotenv()
 
 app = FastAPI()
-client = AsyncOpenAI(api_key="sk-proj-dDZNhXMqgrkXj1SVBwmIT3BlbkFJivViBzo2S6LoHwEztZt1")
+client = AsyncOpenAI(api_key="sk-proj-O8DApYpZj0cYsyx8SEosT3BlbkFJWXDeXAwnj4QsJTh3HReR")
 
 origins = [
     "http://localhost",
