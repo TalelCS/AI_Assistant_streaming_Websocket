@@ -2,3 +2,4 @@ fastapi
 openai
 dotenv
 uvicorn
+typing

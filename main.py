@@ -1,12 +1,11 @@
 from typing import AsyncGenerator, NoReturn
-import os
 import uvicorn
 from dotenv import load_dotenv
-from pathlib import Path
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI, AsyncAssistantEventHandler, override
+
 
 load_dotenv()
 
@@ -17,7 +16,7 @@ origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "https://10aa-41-224-249-253.ngrok-free.app",
+    "https://4fd6-41-226-2-109.ngrok-free.app",
 ]
 
 app.add_middleware(
