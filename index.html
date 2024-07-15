@@ -30,11 +30,30 @@
             opacity: 0;
         }
     }
+
+    ::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #f1f1f100;
+  border-radius: 12px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 12px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
+}
+
     </style>
 </head>
 
 <body style="margin: 0; height: 100vh; display: flex; flex-direction: column;">
-    <div id="root" style="flex-grow: 1;"></div>
+    <div id="root" style="height: 100%; flex-grow: 1; overflow-y: hidden;"></div>
     <script type="text/babel">
        const {
             colors,
@@ -66,14 +85,15 @@
                 mode: 'dark'
             },
         });
-        const WS = new WebSocket("wss://4fd6-41-226-2-109.ngrok-free.app/ws");
+        const WS = new WebSocket("ws://127.0.0.1:8000/ws");
 
         function App() {
             const [conversation, setConversation] = React.useState([]);
             const [question, setQuestion] = React.useState("");
+            const containerRef = React.useRef(null);
             const [loading, setLoading] = React.useState(false);
             const [playing, setPlaying] = React.useState(false);
-            const [recording, setRecording] = React.useState(true);
+            const [recording, setRecording] = React.useState(false);
             const [copiedIndex, setCopiedIndex] = React.useState(null);
             const [openUploadModal, setOpenUploadModal] = React.useState(false);
             const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -97,6 +117,9 @@
                             return [...prevConversation, { role: 'bot', content: newResponse, isComplete: false }];
                         }
                     });
+                    if (containerRef.current) {
+                        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+                    }
                 };
             }, []);
 
@@ -144,6 +167,9 @@
                 setQuestion('');
                 setLoading(true);
                 WS.send(userQuestion);
+                if (containerRef.current) {
+                    containerRef.current.scrollTop = containerRef.current.scrollHeight;
+                }
             };
 
             const handleOpenUploadModal = () => {
@@ -190,11 +216,11 @@
             const renderMessage = (message, index) => {
                 return (
                     <>
-                    <Box key={index} sx={{ display: 'flex', alignItems: message.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 2, flexDirection: message.role === 'user' ? 'row-reverse' : 'row' }}>
+                    <Box key={index} sx={{ display: 'flex', alignItems: message.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 3, flexDirection: message.role === 'user' ? 'row-reverse' : 'row' }}>
                         {message.role === 'bot' && <Avatar alt="Chatbot Avatar" src={chatbotAvatarUrl} sx={{ mr: 2 }} />}
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <Typography variant="body1" sx={{ borderRadius: '25px', backgroundColor: '#333', color: '#fff', p: 2 }} dangerouslySetInnerHTML={markdownToHtml(message.content)} />
-                    {message.role === 'bot' && (
+                                {message.role === 'bot' && (
                                         <Box sx={{ display: 'flex', flexDirection: 'row', ml: 2 }}>
                                             <Tooltip title={playing ? 'Arreter' : 'Lire a haute voix'}>
                                                 <IconButton onClick={() => handleSpeech(message.content)} sx={{ mt: 1, mx: 0.5, width:'fit-content'}}>
@@ -240,8 +266,8 @@
             ];
 
             return (
-                <Container disableGutters style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems:'center', px: 0 }}>
-                    <Box sx={{flexGrow: 1, width: '100%', pt:2, px:5}}>
+                <Container disableGutters style={{ overflowY:'auto', height: '100%', flexGrow: 1,  display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems:'center', px: 0 }}>
+                    <Box ref={containerRef} sx={{flexGrow: 1, overflowY: 'auto', width: '100%', pt:2, px:5 ,pr:7}}>
                         {conversation.length === 0 ? (
                             <Card sx={{ borderRadius: '10px', textAlign: 'center', mb: 2, mx: 3 ,mt: 2}}>
                                 <CardContent>
@@ -255,9 +281,9 @@
                         ) : (
                             <img src="https://studyassur.com/upload/content/images/partners/studyassur-logo.png" alt="studyassur-logo" style={{ maxWidth: '100px', marginBottom: '20px' }} />
                         )}
-                        {conversation.map((message, index) => renderMessage(message, index))}
+                        <Box sx={{ mb: 10 }}>{conversation.map((message, index) => renderMessage(message, index))}</Box>
                         {loading && (
-                            <Box sx={{ mt: 2 }}>
+                            <Box>
                                 <Skeleton />
                                 <Skeleton animation="wave" />
                                 <Skeleton animation={false} />
@@ -266,38 +292,38 @@
                     </Box>
                     {conversation.length === 0 && (
                         <Box 
-      sx={{ 
-        width: '80%', 
-        display: 'flex', 
-        justifyContent: isMobile ? 'flex-start' : 'space-around', 
-        mb: 15, 
-        py: isMobile ? 2 : 0,
-        overflowX: isMobile ? 'auto' : 'visible' 
-      }}
-    >
-      {faqs.map((faq, index) => (
-        <Card 
-          key={index} 
-          onClick={() => handleSend(faq)} 
-          sx={{ 
-            minWidth: isMobile ? '70%' : '22%', 
-            borderRadius: '10px', 
-            cursor: 'pointer', 
-            mx: 1,
-            '&:hover': { 
-              boxShadow: 6, 
-              backgroundColor: '#615857' 
-            } 
-          }}
-        >
-          <CardContent>
-            <Typography variant="body1">
-              {faq}
-            </Typography>
-          </CardContent>
-        </Card>
-      ))}
-    </Box>
+                    sx={{ 
+                        width: '80%', 
+                        display: 'flex', 
+                        justifyContent: isMobile ? 'flex-start' : 'space-around', 
+                        mb: 15, 
+                        py: isMobile ? 2 : 0,
+                        overflowX: isMobile ? 'auto' : 'visible' 
+                    }}
+                    >
+                    {faqs.map((faq, index) => (
+                        <Card 
+                        key={index} 
+                        onClick={() => handleSend(faq)} 
+                        sx={{ 
+                            minWidth: isMobile ? '70%' : '22%', 
+                            borderRadius: '10px', 
+                            cursor: 'pointer', 
+                            mx: 1,
+                            '&:hover': { 
+                            boxShadow: 6, 
+                            backgroundColor: '#615857' 
+                            } 
+                        }}
+                        >
+                        <CardContent>
+                            <Typography variant="body1">
+                            {faq}
+                            </Typography>
+                        </CardContent>
+                        </Card>
+                    ))}
+                    </Box>
                         )}
                     <Box sx={{ display:'flex', flexDirection: 'row-reverse', alignItems:'center', width: '80%', position: 'fixed', bottom: 0, pb: 2 ,backgroundImage: 'linear-gradient(0deg, rgba(18,18,18,1) 50%, rgba(0,212,255,0) 100%)'}}>
                         <Box sx={{  width: '95%'}}>
