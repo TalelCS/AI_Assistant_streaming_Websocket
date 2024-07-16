@@ -2,9 +2,10 @@ from typing import AsyncGenerator, NoReturn
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI, AsyncAssistantEventHandler, override
+import pyaudio
 
 
 load_dotenv()
@@ -16,7 +17,6 @@ origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "https://4fd6-41-226-2-109.ngrok-free.app",
 ]
 
 app.add_middleware(
@@ -95,21 +95,27 @@ async def websocket_endpoint(websocket: WebSocket) -> NoReturn:
         async for text in get_ai_response(websocket, message, thread_id):
             await websocket.send_text(text)
 
+async def audio_stream(content: str):
+    p = pyaudio.PyAudio()
+    stream = p.open(format=8,
+                    channels=1,
+                    rate=24_000,
+                    output=True)
+    async with client.audio.speech.with_streaming_response.create(
+            model="tts-1",
+            voice="alloy",
+            input=content,
+            response_format="mp3"
+    ) as response:
+        async for chunk in response.iter_bytes(1024):
+            yield chunk
 
 @app.get("/tts")
 async def get_voice_response(content: str):
     """
     OpenAI Assistant Text To Speech
     """
-    speech_file_path = "../ai-assistant/speech.mp3"
-    response = await client.audio.speech.create(
-        model="tts-1",
-        voice="alloy",
-        input=content
-    )
-    response.stream_to_file(speech_file_path)
-    return FileResponse(speech_file_path)
-
+    return StreamingResponse(audio_stream(content=content), media_type="audio/mpeg")
 
 if __name__ == "__main__":
     uvicorn.run(
